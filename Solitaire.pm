@@ -1,98 +1,128 @@
+#------------------------------------------------------------------------------#
+# Crypt::Solitaire
+#
+# Solitaire cryptosystem, as used in Neal Stephenson's novel _Cryptonomicon_
+# Designed by Bruce Schneier (President, Counterpane Systems)
+# Original Perl Code by Ian Goldberg <ian@cypherpunks.ca>, 19980817
+# Minor changes and module-ification by Kurt Kincaid <sifukurt@yahoo.com>
+#
+#       Last Modified:  28-Nov-2001 04:20:10 PM
+#       Copyright(c) 2001, Kurt Kincaid. All Rights Reserved.
+#
+# This is free software and may be modified and/or redistributed under the
+# same terms as perl itself.
+#------------------------------------------------------------------------------#
+
 package Crypt::Solitaire;
-
-## Solitaire cryptosystem, as used in Neal Stephenson's novel _Cryptonomicon_
-## Designed by Bruce Schneier (President, Counterpane Systems)
-## Original Perl Code by Ian Goldberg <ian@cypherpunks.ca>, 19980817
-## Minor changes and module-ification by Kurt Kincaid <ceo@neurogames.com>
-
 use strict;
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK $multFactor $k $D $c $v $Deck $text $passphrase $mode $class );
 
 require Exporter;
 
-@ISA = qw(Exporter AutoLoader);
+@ISA       = qw(Exporter AutoLoader);
+@EXPORT_OK = qw(Pontifex);
 
-package Crypt::Solitaire;
+$VERSION = "2.0";
 
-require Exporter;
-$VERSION = '1.02';
+sub new {
+    ( $class, $passphrase ) = @_;
+    $passphrase =~ y/a-z/A-Z/;
+    $passphrase =~ s/[A-Z]/$k=ord($&)-64,&e/eg;
+    my $self = bless {}, $class;
+    return $self;
+}
 
-@ISA = qw(Exporter);
-use vars qw($VERSION @EXPORT_OK);
-@EXPORT_OK = qw($passphrase $text $mode Pontifex);
+sub encrypt {
+    my $self = shift;
+    ( $text, $passphrase ) = @_;
+    return Pontifex( $text, $passphrase, "e" );
+}
 
-my $multFactor;
-my $k;
-my $D;
-my $c;
-my $v;
-my $Deck;
+sub decrypt {
+    my $self = shift;
+    ( $text, $passphrase ) = @_;
+    return Pontifex( $text, $passphrase, "d" );
+}
 
 sub Pontifex {
-	my ($text, $passphrase, $mode) = @_;
-	if ($mode =~ /^e/i) {
-		$multFactor = 1;
-	} elsif ($mode =~ /^d/i) {
-		$multFactor = -1;
-	} else {
-		return undef;
-	}
+    if ( ref $_[ 0 ] ) {
+        my $self = shift;
+    }
+    ( $text, $passphrase, $mode ) = @_;
+    if ( $mode =~ /^e/i ) {
+        $multFactor = 1;
+    } elsif ( $mode =~ /^d/i ) {
+        $multFactor = -1;
+    } else {
+        return undef;
+    }
 
-	$Deck = pack('C*',33..86);
-	$passphrase =~ y/a-z/A-Z/;
-	$passphrase =~ s/[A-Z]/$k=ord($&)-64,&e/eg;
+    $Deck = pack( 'C*', 33 .. 86 );
 
-	$k = 0;
+    $k = 0;
 
-	$text =~ y/a-z/A-Z/;
-	$text =~ y/A-Z//dc;
-	if ($multFactor == 1) {
-		$text .= "X" while length($text)%5;
-	}
-	$text =~ s/./chr((ord($&)-13+$multFactor*&e)%26+65)/eg;
+    $text =~ y/a-z/A-Z/;
+    $text =~ y/A-Z//dc;
+    if ( $multFactor == 1 ) {
+        $text .= "X" while length( $text ) % 5;
+    }
+    $text =~ s/./chr((ord($&)-13+$multFactor*&e)%26+65)/eg;
 
-	if ($multFactor == -1) {
-		$text =~ s/X*$//;
-	}
-	$text =~ s/.{5}/$& /g;
-	return $text;
+    if ( $multFactor == -1 ) {
+        $text =~ s/X*$//;
+    }
+    $text =~ s/.{5}/$& /g;
+    return $text;
 }
 
 sub v {
-    $v=ord(substr($D,$_[0]))-32;
-    $v>53?53:$v;
+    $v = ord( substr( $D, $_[ 0 ] ) ) - 32;
+    $v > 53 ? 53 : $v;
 }
 
 sub e {
     $D =~ s/(.*)U$/U$1/;
     $D =~ s/U(.)/$1U/;
 
-    $D =~ s/(.*)V$/V$1/; $D =~ s/V(.)/$1V/;
-    $D =~ s/(.*)V$/V$1/; $D =~ s/V(.)/$1V/;
+    $D =~ s/(.*)V$/V$1/;
+    $D =~ s/V(.)/$1V/;
+    $D =~ s/(.*)V$/V$1/;
+    $D =~ s/V(.)/$1V/;
 
     $D =~ s/(.*)([UV].*[UV])(.*)/$3$2$1/;
 
-    $c=&v(53);
+    $c = &v( 53 );
     $D =~ s/(.{$c})(.*)(.)/$2$1$3/;
 
-    if ($k) {
-	$D =~ s/(.{$k})(.*)(.)/$2$1$3/;
-	return;
+    if ( $k ) {
+        $D =~ s/(.{$k})(.*)(.)/$2$1$3/;
+        return;
     }
 
-    $c=&v(&v(0));
+    $c = &v( &v( 0 ) );
 
-    $c>52?&e:$c;
+    $c > 52 ? &e : $c;
 }
 
 1;
 __END__
+
 
 =head1 NAME
 
 Crypt::Solitaire - Solitaire encryption
 
 =head1 SYNOPSIS
+
+# OO Interface
+  use Crypt::Solitaire;
+  $ref = Crypt::Solitaire->new( $passphrase );
+  $encrypted = $ref->encrypt( $text );
+  
+  $ref2 = Crypt::Solitaire->new( $passphrase );
+  $decrypted = $ref2->decrypt( $encrypted );
+  
+# Functional Interface
 
   use Crypt::Solitaire;
   my $encrypted = Pontifex( $plaintext, $passphrase, $mode );
@@ -132,6 +162,9 @@ Restricted only to letters A..Z. Lower case letters are converted to upper
 case, and due to the fact that Solitaire applies its own formatting to the text, the
 output can be a little tricky at first glance.
 
+It also should be noted that there is a verified bias in the algorithm. Fore more
+information on this, go here: http://www.ciphergoth.org/crypto/solitaire/
+
 =head1 METHODS
 
 =over 4
@@ -149,10 +182,11 @@ Designed by Bruce Schneier (President, Counterpane Systems)
 
 Original Perl Code by Ian Goldberg <ian@cypherpunks.ca>, 19980817
 
-Minor changes and module-ification by Kurt Kincaid <ceo@neurogames.com>
+Minor changes and module-ification by Kurt Kincaid <sifukurt@yahoo.com>
 
 =head1 SEE ALSO
 
 perl(1), Counterpane System (http://www.counterpane.com).
 
 =cut
+
